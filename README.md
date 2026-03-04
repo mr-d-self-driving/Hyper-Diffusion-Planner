@@ -27,17 +27,31 @@ The official implementation of **Hyper Diffusion Planner**. Our work demonstrate
 Real-world urban scenario testing uses model output, with only simple smoothness post-refinement.
 </div>
 
-
-
-
 ## To Do List
 
 The code is under cleaning and will be released gradually. Prior to this, you may refer to [Diffusion Planner](https://github.com/ZhengYinan-AIR/Diffusion-Planner/) / [Flow Planner](https://github.com/DiffusionAD/Flow-Planner) for the training and inference of diffusion models and [DIPOLE](https://github.com/LRMbbj/DIPOLE) for Diffusion RL.
 
-- [ ] Nuplan Implementation
+- [x] Nuplan Implementation
 - [ ] NAVSIM Implementation
 - [x] initial repo & paper
 
+## NuPlan Implementation
+
+We provide the NuPlan implementation in [`HDP-nuplan/`](./HDP-nuplan), based on [Diffusion Planner](https://github.com/ZhengYinan-AIR/Diffusion-Planner/) with several modifications for HDP.
+
+### Main Modifications
+
+- Diffusion loss space:
+  support flexible combinations of model prediction target and supervision target via `--diffusion_model_type` and `--diffusion_supervision_type` in `train_predictor.py`.
+  The conversion logic is implemented in `hdp_nuplan/model/diffusion_utils/sde.py` and used in `hdp_nuplan/loss.py`.
+  Current options: `x_start`, `noise`, `v`, `score`.
+- Hybrid planning loss:
+  we use
+  `L_hybrid = L_velocity + w * L_waypoints`
+  where `w` is set by `--planning_hybrid_loss` (default `0.01`).
+  The detached integration used by the waypoint term is implemented in `hdp_nuplan/utils/traj_kinematics.py`.
+
+For additional notes, see [`HDP-nuplan/README.md`](./HDP-nuplan/README.md).
 
 ## Bibtex
 
