@@ -74,6 +74,7 @@ class Decoder(nn.Module):
         ego_neighbor_encoding = encoder_outputs['encoding']
         B = ego_neighbor_encoding.shape[0]
         route_lanes = inputs['route_lanes']
+        ego_v = inputs['ego_current_state'][:, 4:6] # take the v_x v_y of current states for dit embedding
 
         if self.training:
             sampled_trajectories = inputs['sampled_trajectories'] # [B, V_future, 4]
@@ -86,6 +87,7 @@ class Decoder(nn.Module):
                         diffusion_time,
                         ego_neighbor_encoding,
                         route_lanes,
+                        ego_v,
                     ).reshape(B, -1, 4)
                 }
         else:
@@ -98,7 +100,7 @@ class Decoder(nn.Module):
                         other_model_params={
                             "cross_c": ego_neighbor_encoding, 
                             "route_lanes": route_lanes,
-                            # "neighbor_current_mask": neighbor_current_mask                            
+                            "ego_current_states": ego_v,                           
                         },
                         dpm_solver_params={},
                         model_wrapper_params={},
@@ -169,6 +171,7 @@ class DiT(nn.Module):
         self.route_encoder = route_encoder
         self.agent_embedding = nn.Embedding(future_length, hidden_dim)
         self.preproj = Mlp(in_features=output_dim, hidden_features=512, out_features=hidden_dim, act_layer=nn.GELU, drop=0.)
+        self.ego_state_proj = nn.Linear(2, hidden_dim)
         self.t_embedder = TimestepEmbedder(hidden_dim)
         self.blocks = nn.ModuleList([DiTBlock(hidden_dim, heads, dropout, mlp_ratio) for i in range(depth)])
         self.final_layer = FinalLayer(hidden_dim, output_dim)
@@ -179,7 +182,7 @@ class DiT(nn.Module):
     def model_type(self):
         return self._model_type
 
-    def forward(self, x, t, cross_c, route_lanes):
+    def forward(self, x, t, cross_c, route_lanes, ego_current_states):
         """
         Forward pass of DiT.
         x: (B, T, output_dim)   -> Embedded out of DiT
@@ -190,8 +193,10 @@ class DiT(nn.Module):
         
         x = self.preproj(x)
 
-        x_embedding = self.agent_embedding.weight[None, :, :].expand(B, -1, -1) # (B, P, D)
-        x = x + x_embedding
+        x_embedding = self.agent_embedding.weight[None, :, :].expand(B, -1, -1) # (B, T, D) 
+        ego_state_embedding = self.ego_state_proj(ego_current_states)
+        ego_state_embedding = ego_state_embedding[:, None, :]
+        x = x + x_embedding + ego_state_embedding
 
         route_encoding = self.route_encoder(route_lanes)
         y = route_encoding
